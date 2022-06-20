@@ -16,23 +16,50 @@ class MyHomePage extends StatefulWidget {
 
 class _MyHomePageState extends State<MyHomePage> {
   final StreamController<String> _eventData = StreamController<String>();
+  late PusherClient pusher;
   late Channel channel;
 
-  PusherClient pusher = PusherClient(
-    'ChatsAppApiProdKey',
-    autoConnect: true,
-    PusherOptions(
-      host: 'api.chatapp.online',
-      wssPort: 6001,
-      encrypted: true,
-      auth: PusherAuth(
+  Future<void> initPusher() async {
+    PusherAuth auth = PusherAuth(
+      'https://api.chatapp.online/broadcasting/auth',
+      headers: {},
+    );
+
+    http.Response response = await http.get(
+      Uri.parse('https://api.chatapp.online/v1/tokens/check'),
+      headers: {
+        'Authorization': '\$2y\$10\$.tJOAB6O.ff0xXusQXm8heyGN6YD4QdhDSQUqF0rgvkDrKVzuWev2',
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+      },
+    );
+    if (jsonDecode(response.body)['success'] == 'true') {
+      auth = PusherAuth(
         'https://api.chatapp.online/broadcasting/auth',
         headers: {
-          'Authorization': '\$2y\$10\$.tJOAB6O.ff0xXusQXm8heyGN6YD4QdhDSQUqF0rgvkDrKVzuWev2',
+          'Authorization': jsonDecode(response.body)['data']['accessToken'],
         },
+      );
+    } else {
+      http.Response response = await http.post(
+        Uri.parse('https://api.chatapp.online/v1/tokens/refresh'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          'Refresh': 'quo',
+        },
+      );
+    }
+
+    pusher = PusherClient(
+      'ChatsAppApiProdKey',
+      PusherOptions(
+        host: 'api.chatapp.online',
+        wssPort: 6001,
+        auth: auth,
       ),
-    ),
-  );
+    );
+  }
 
   @override
   void initState() {
@@ -41,6 +68,7 @@ class _MyHomePageState extends State<MyHomePage> {
   }
 
   Future<void> firePusher(String channelName, String eventName) async {
+    await initPusher();
     connectPusher();
     await subscribePusher(channelName);
     bindEvent(eventName);
